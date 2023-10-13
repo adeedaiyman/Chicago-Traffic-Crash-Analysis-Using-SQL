@@ -2,10 +2,6 @@
 
 	Chicago Traffic Crashes
 	
-	An SQL analysis about each traffic crash on city streets within the City of Chicago limits and under 
-	the jurisdiction of Chicago Police Department (CPD). Data shown as is from the electronic crash reporting system 
-	(E-Crash) at CPD, excluding any personally identifiable information.
-	
 		column_name              |
 	-----------------------------+
 	crash_date                   |
@@ -80,14 +76,14 @@ earliest_date          |latest_date            |
 -- What is the number of reported crashes per year?
 
 SELECT
-	EXTRACT(YEAR FROM crash_date)::numeric AS crash_year,
-	count(*) AS reported_crashes
+    EXTRACT(YEAR FROM crash_date) AS crash_year,
+    COUNT(*) AS reported_crashes
 FROM
-	crashes
+    crashes
 GROUP BY
-	crash_year
-ORDER BY 
-	crash_year;
+    crash_year
+ORDER BY
+    crash_year;
 
 -- Results:
 
@@ -109,59 +105,59 @@ crash_year|reported_crashes|
 -- Lets take a look at 2017 data and compare to 2018 data to see if we notice any major inconsistancies.
 
 WITH get_2017 AS (
-	SELECT
-		EXTRACT(YEAR FROM crash_date) AS crash_year,
-		crash_month::numeric,
-		count(*) AS crash_count
-	FROM
-		crashes
-	WHERE
-		EXTRACT(YEAR FROM crash_date) = '2017.0'
-	GROUP BY
-		crash_year,
-		crash_month
+    SELECT
+        EXTRACT(YEAR FROM crash_date) AS crash_year,
+        CAST(crash_month AS SIGNED) AS crash_month,
+        COUNT(*) AS crash_count
+    FROM
+        crashes
+    WHERE
+        EXTRACT(YEAR FROM crash_date) = 2017
+    GROUP BY
+        crash_year,
+        crash_month
 ),
 get_2018 AS (
-	SELECT
-		EXTRACT(YEAR FROM crash_date) AS crash_year,
-		crash_month::numeric,
-		count(*) AS crash_count
-	FROM
-		crashes
-	WHERE
-		EXTRACT(YEAR FROM crash_date) = '2018.0'
-	GROUP BY
-		crash_year,
-		crash_month
+    SELECT
+        EXTRACT(YEAR FROM crash_date) AS crash_year,
+        CAST(crash_month AS SIGNED) AS crash_month,
+        COUNT(*) AS crash_count
+    FROM
+        crashes
+    WHERE
+        EXTRACT(YEAR FROM crash_date) = 2018
+    GROUP BY
+        crash_year,
+        crash_month
 ),
 get_count_diff AS (
-	SELECT
-		to_char(to_date(g17.crash_month::TEXT, 'MM'), 'Month') AS crash_month,
-		g17.crash_count AS count_2017,
-		g18.crash_count AS count_2018,
-		g18.crash_count - g17.crash_count AS count_diff
-	FROM
-		get_2017 AS g17
-	JOIN
-		get_2018 AS g18
-	ON g17.crash_month = g18.crash_month
-	ORDER BY
-		g17.crash_month::NUMERIC
+    SELECT
+        DATE_FORMAT(STR_TO_DATE(CONVERT(g17.crash_month, CHAR), '%m'), '%M') AS crash_month,
+        g17.crash_count AS count_2017,
+        g18.crash_count AS count_2018,
+        g18.crash_count - g17.crash_count AS count_diff
+    FROM
+        get_2017 AS g17
+    JOIN
+        get_2018 AS g18
+    ON g17.crash_month = g18.crash_month
+    ORDER BY
+        CAST(g17.crash_month AS SIGNED)
 )
 SELECT
-	crash_month,
-	count_2017,
-	count_2018,
-	count_diff,
-	CASE
-		WHEN count_diff >= (count_2018 * .5) THEN 'Over 50% Difference'
-		WHEN count_diff >= (count_2018 * .4) THEN 'Over 40% Difference'
-		WHEN count_diff >= (count_2018 * .3) THEN 'Over 30% Difference'
-		WHEN count_diff >= (count_2018 * .2) THEN 'Over 20% Difference'
-		ELSE 'No Significant Difference'
-	END AS difference_percentage_range
+    crash_month,
+    count_2017,
+    count_2018,
+    count_diff,
+    CASE
+        WHEN count_diff >= (count_2018 * 0.5) THEN 'Over 50% Difference'
+        WHEN count_diff >= (count_2018 * 0.4) THEN 'Over 40% Difference'
+        WHEN count_diff >= (count_2018 * 0.3) THEN 'Over 30% Difference'
+        WHEN count_diff >= (count_2018 * 0.2) THEN 'Over 20% Difference'
+        ELSE 'No Significant Difference'
+    END AS difference_percentage_range
 FROM
-	get_count_diff;
+    get_count_diff;
 	
 -- Results:
 
@@ -295,12 +291,12 @@ rear end            |370 days 19:44:00|
 -- What is the average and median date difference between crash date and police report date?
 
 SELECT
-	 avg(date_police_notified - crash_date) AS avg_date_difference,
-	 PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY (date_police_notified - crash_date)) AS median_date_difference
+    AVG(TIMESTAMPDIFF(SECOND, crash_date, date_police_notified)) AS avg_date_difference,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY TIMESTAMPDIFF(SECOND, crash_date, date_police_notified)) AS median_date_difference
 FROM
-	crash_timeline
+    crash_timeline
 WHERE
-	(date_police_notified - crash_date) > '00:00:00';
+    TIMESTAMPDIFF(SECOND, crash_date, date_police_notified) > 0;
 
 -- Results:
 
@@ -577,21 +573,19 @@ train                       |             1|
 -- Explore workzone data
 
 SELECT
-	crash_date,
-	work_zone,                  
-	work_zone_type,              
-	workers_present,
-	injuries_total
+    crash_date,
+    work_zone,
+    work_zone_type,
+    workers_present,
+    injuries_total
 FROM
-	crash_timeline
+    crash_timeline
 WHERE
-	work_zone IS NOT NULL
-AND
-	work_zone = 'y'
-AND
-	injuries_total::int > 1
+    work_zone IS NOT NULL
+    AND work_zone = 'y'
+    AND CAST(injuries_total AS SIGNED) > 1
 ORDER BY
-	injuries_total::int DESC
+    CAST(injuries_total AS SIGNED) DESC
 LIMIT 10;
 
 -- Results:
@@ -638,17 +632,16 @@ tuesday          |            58|
 -- What was the ranking of the deadliest years in our recordset?
 
 SELECT
-	EXTRACT(YEAR FROM crash_date)::numeric AS crash_year,
-	count(*) AS fatality_count,
-	RANK() OVER (ORDER BY count(*) desc) AS year_rank
+    DATE_FORMAT(STR_TO_DATE(crash_month, '%m'), '%M') AS crash_month,
+    COUNT(*) AS fatality_count
 FROM
-	crash_timeline
+    crash_timeline
 WHERE
-	injuries_fatal <> '0'
+    injuries_fatal <> '0'
 GROUP BY
-	crash_year
+    crash_month
 ORDER BY
-	fatality_count DESC;
+    fatality_count DESC;
 
 -- Results:
 
@@ -694,20 +687,21 @@ February   |            33|
 -- What single day has the most amount of fatal crashes?
 
 SELECT
-	crash_date::date,
-	weather_condition,
-	count(*) AS fatality_count,
-	dense_RANK() OVER (ORDER BY count(*) desc) AS date_rank
+    CAST(crash_date AS DATE) AS crash_date,
+    weather_condition,
+    COUNT(*) AS fatality_count,
+    DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS date_rank
 FROM
-	crash_timeline
+    crash_timeline
 WHERE
-	injuries_fatal <> '0'
+    injuries_fatal <> '0'
 GROUP BY
-	crash_date::date,
-	weather_condition
+    CAST(crash_date AS DATE),
+    weather_condition
 ORDER BY
-	fatality_count DESC
+    fatality_count DESC
 LIMIT 10;
+
 
 -- Results:
 
